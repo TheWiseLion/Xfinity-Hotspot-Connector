@@ -3,7 +3,7 @@
 ###This is an automatic connector for Xfinity Hotspots.
 
 
-<dl><dd><dd>Automatically changes mac-address and reapplies for Xfinity's free complementary hour of internet.  </dd></dd></dl>
+<dl><dd><dd>Automatically changes mac-address and reapplies for Xfinity's complementary (free) hour of internet.  </dd></dd></dl>
 <br>
 ![Alt text](/screenshots/sc2.PNG?raw=true "Screen Shot 1")
 <br>
