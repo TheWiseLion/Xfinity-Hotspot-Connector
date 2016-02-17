@@ -48,7 +48,6 @@
 ###Possible Improvements:
 + I'd be nice if another developer figured out how to switch connections without tcp connections getting reset. This seems like it      might   be possible since the ip-address often stays exactly the same between reconnects.
   ![Alt text](/screenshots/IP-Same.PNG?raw=true "Ip Stays The Same")
-
 + Support for mac & linux
 + Better display and network/bandwith chart
 + Other hotspot network support (e.g. at&t)
