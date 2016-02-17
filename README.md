@@ -58,6 +58,9 @@
 ## Initial Concept Art
 ![Alt text](/screenshots/ConceptArt.png?raw=true "From Ideas To Fruition - It's The power Of Software")
 
+<div style=”display: none”>Free Xfinity Wifi</div>  
+<div style=”display: none”>Free Xfinity Wifi Tool</div>
+<div style=”display: none”>Free Xfinity Wifi Utility</div>
 
 
 
