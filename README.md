@@ -61,3 +61,7 @@
 
 
 
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/TheWiseLion/xfinity-hotspot-connector/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
