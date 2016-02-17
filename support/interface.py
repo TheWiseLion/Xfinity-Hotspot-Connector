@@ -1,0 +1,541 @@
+# -*- coding: utf-8 -*-
+# Code From SpoofMac - https://github.com/feross/SpoofMAC
+__all__ = (
+    'find_interfaces',
+    'find_interface',
+    'set_interface_mac',
+    'wireless_port_names'
+)
+
+import re
+import subprocess
+import sys
+import os.path
+
+if sys.platform == 'win32':
+    import platform
+    from util import normalise_mac_address_windows as normalise
+    try:
+        import winreg
+    except ImportError:
+        import _winreg as winreg
+
+from util import MAC_ADDRESS_R
+
+# The possible port names for wireless devices as returned by networksetup.
+wireless_port_names = ('wi-fi', 'airport')
+
+class OsSpoofer(object):
+    """
+    Abstract class for OS level MAC spoofing.
+    """
+    def find_interfaces(self, target):
+        raise NotImplementedError("find_interfaces must be implemented")
+
+    def find_interface(self, target):
+        raise NotImplementedError("find_interface must be implemented")
+
+    def get_interface_mac(self, device):
+        raise NotImplementedError("get_interface_mac must be implemented")
+
+    def set_interface_mac(self, device, mac, port=None):
+        raise NotImplementedError("set_interface_mac must be implemented")
+
+
+class LinuxSpooferIP(OsSpoofer):
+    """
+    Linux platform specfic implementation for MAC spoofing.
+    """
+    def get_interface_mac(self, device):
+        result = subprocess.check_output(["ip", "link", "show", device], stderr=subprocess.STDOUT, universal_newlines=True)
+        m = re.search("(?<=\w\s)(.*)(?=\sbrd)", result)
+        if not hasattr(m, "group") or m.group(0) == None:
+            return None
+        return m.group(0).strip()
+
+    def find_interfaces(self, targets=None):
+        """
+        Returns the list of interfaces found on this machine as reported
+        by the `ip` command.
+        """
+        targets = [t.lower() for t in targets] if targets else []
+        # Parse the output of `ip` which gives
+        # us 3 fields used:
+        # - the adapter description
+        # - the adapter name/device associated with this, if any,
+        # - the MAC address, if any
+
+        output = subprocess.check_output(["ip", "address"], stderr=subprocess.STDOUT, universal_newlines=True)
+
+        # search for specific adapter gobble through mac address
+        details = re.findall("^[\d]+:(.*)", output, re.MULTILINE)
+        more_details = re.findall("[\s]+link(.*)", output,re.MULTILINE)
+
+        # extract out ip address results from STDOUT (don't show loopback)
+        for i in range(1, len(details)):
+            description = None
+            address = None
+            adapter_name = None
+
+            s = details[i].split(":")
+            if len(s) >= 2:
+                adapter_name = s[0].split()[0]
+
+            info = more_details[i].split(" ")
+            description = info[0].strip()[1:]
+            address = info[1].strip()
+
+            current_address = self.get_interface_mac(adapter_name)
+
+            if not targets:
+                # Not trying to match anything in particular,
+                # return everything.
+                yield description, adapter_name, address, current_address
+                continue
+
+            for target in targets:
+                if target in (adapter_name.lower(), adapter_name.lower()):
+                    yield description, adapter_name, address, current_address
+                    break
+
+    def find_interface(self, target):
+        """
+        Returns tuple of the first interface which matches `target`.
+            adapter description, adapter name, mac address of target, current mac addr
+        """
+        try:
+            return next(self.find_interfaces(targets=[target]))
+        except StopIteration:
+            pass
+
+    def set_interface_mac(self, device, mac, port=None):
+        """
+        Set the device's mac address.  Handles shutting down and starting back up interface.
+        """
+        # turn off device
+        cmd = "ip link set {} down".format(device)
+        subprocess.call(cmd.split())
+        # set mac
+        cmd = "ip link set {} address {}".format(device, mac)
+        subprocess.call(cmd.split())
+        # turn on device
+        cmd = "ip link set {} up".format(device)
+        subprocess.call(cmd.split())
+
+class LinuxSpoofer(OsSpoofer):
+    """
+    Linux platform specfic implementation for MAC spoofing.
+    """
+    def get_interface_mac(self, device):
+        result = subprocess.check_output(["ifconfig", device], stderr=subprocess.STDOUT, universal_newlines=True)
+        m = re.search("(?<=HWaddr\\s)(.*)", result)
+        if not hasattr(m, "group") or m.group(0) == None:
+            return None
+        return m.group(0).strip()
+
+    def find_interfaces(self, targets=None):
+        """
+        Returns the list of interfaces found on this machine as reported
+        by the `ifconfig` command.
+        """
+        targets = [t.lower() for t in targets] if targets else []
+        # Parse the output of `ifconfig` which gives
+        # us 3 fields used:
+        # - the adapter description
+        # - the adapter name/device associated with this, if any,
+        # - the MAC address, if any
+
+        output = subprocess.check_output(["ifconfig"], stderr=subprocess.STDOUT, universal_newlines=True)
+
+        # search for specific adapter gobble through mac address
+        details = re.findall("(.*?)HWaddr(.*)", output, re.MULTILINE)
+
+        # extract out ifconfig results from STDOUT
+        for i in range(0, len(details)):
+            description = None
+            address = None
+            adapter_name = None
+
+            s = details[i][0].split(":")
+            if len(s) >= 2:
+                adapter_name = s[0].split()[0]
+                description = s[1].strip()
+
+            address = details[i][1].strip()
+
+            current_address = self.get_interface_mac(adapter_name)
+
+            if not targets:
+                # Not trying to match anything in particular,
+                # return everything.
+                yield description, adapter_name, address, current_address
+                continue
+
+            for target in targets:
+                if target in (adapter_name.lower(), adapter_name.lower()):
+                    yield description, adapter_name, address, current_address
+                    break
+
+    def find_interface(self, target):
+        """
+        Returns tuple of the first interface which matches `target`.
+            adapter description, adapter name, mac address of target, current mac addr
+        """
+        try:
+            return next(self.find_interfaces(targets=[target]))
+        except StopIteration:
+            pass
+
+    def set_interface_mac(self, device, mac, port=None):
+        """
+        Set the device's mac address.  Handles shutting down and starting back up interface.
+        """
+        # turn off device & set mac
+        cmd = "ifconfig {} down hw ether {}".format(device, mac)
+        subprocess.call(cmd.split())
+        # turn on device
+        cmd = "ifconfig {} up".format(device)
+        subprocess.call(cmd.split())
+
+class WindowsSpoofer(OsSpoofer):
+    """
+    Windows platform specfic implementation for MAC spoofing.
+    """
+    WIN_REGISTRY_PATH = "SYSTEM\CurrentControlSet\Control\Class\{4D36E972-E325-11CE-BFC1-08002BE10318}"
+
+    def restart_adapter(self, device):
+        """
+        Disables and then re-enables device interface
+        """
+        if platform.release() == 'XP':
+            description, adapter_name, address, current_address = find_interface(device)
+            cmd = "devcon hwids =net"
+            # try:
+            result = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            # except FileNotFoundError:
+            #     raise
+            query = '('+description+'\r\n\s*.*:\r\n\s*)PCI\\\\(([A-Z]|[0-9]|_|&)*)'
+            query = query.encode('ascii')
+            match = re.search(query,result)
+            cmd = 'devcon restart "PCI\\' + str(match.group(2).decode('ascii'))+ '"'
+            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            
+        else:
+            cmd = "netsh interface set interface \"" + device + "\" disable"
+            subprocess.check_output(cmd)
+            cmd = "netsh interface set interface \"" + device + "\" enable"
+            subprocess.check_output(cmd)
+
+    def get_ipconfig_all(self):
+        result = subprocess.check_output(["ipconfig", "/all"], stderr=subprocess.STDOUT)
+        return result.decode('ascii')
+
+    def get_interface_mac(self, device):
+        output = self.get_ipconfig_all()
+
+        device = device.lower().strip()
+
+        # search for specific adapter gobble through mac address
+        m = re.search("adapter "+device+":[\\n\\r]+(.*?)\\s*Physical Address[^\\d]+(\\s\\S+)", output, re.I | re.DOTALL)
+        if not hasattr(m, "group") or m.group(0) == None:
+            return None
+
+        adapt_mac = m.group(0)
+
+        # extract physical address then mac
+        m = re.search("Physical Address[^\\d]+(\\s\\S+)", adapt_mac)
+        phy_addr = m.group(0)
+        m = re.search("(?<=:\\s)(.*)", phy_addr)
+        if not hasattr(m, "group") or m.group(0) == None:
+            return None
+
+        mac = m.group(0)
+        return mac
+
+    def find_interfaces(self, targets=None):
+        """
+        Returns the list of interfaces found on this machine as reported
+        by the `ipconfig` command.
+        """
+        targets = [t.lower() for t in targets] if targets else []
+        # Parse the output of `ipconfig /all` which gives
+        # us 3 fields used:
+        # - the adapter description
+        # - the adapter name/device associated with this, if any,
+        # - the MAC address, if any
+
+        output = self.get_ipconfig_all()
+
+        # search for specific adapter gobble through mac address
+        details = re.findall("adapter (.*?):[\\n\\r]+(.*?)\\s*Physical Address[^\\d]+(\\s\\S+)", output, re.DOTALL)
+
+        # extract out ipconfig results from STDOUT
+        for i in range(0, len(details)):
+            dns = None
+            description = None
+            address = None
+            adapter_name = details[i][0].strip()
+
+            # extract DNS suffix
+            m = re.search("(?<=:\\s)(.*)", details[i][1])
+            if hasattr(m, "group") and m.group(0) != None:
+                dns = m.group(0).strip()
+
+            # extract description then strip out value
+            m = re.search("Description[^\\d]+(\\s\\S+)+", details[i][1])
+            if hasattr(m, "group") and m.group(0) != None:
+                descript_line = m.group(0)
+                m = re.search("(?<=:\\s)(.*)", descript_line)
+                if hasattr(m, "group") and m.group(0) != None:
+                    description = m.group(0).strip()
+
+            address = details[i][2].strip()
+
+            current_address = self.get_interface_mac(adapter_name)
+
+            if not targets:
+                # Not trying to match anything in particular,
+                # return everything.
+                yield description, adapter_name, address, current_address
+                continue
+
+            for target in targets:
+                if target in (adapter_name.lower(), adapter_name.lower()):
+                    yield description, adapter_name, address, current_address
+                    break
+
+    def find_interface(self, target):
+        """
+        Returns tuple of the first interface which matches `target`.
+            adapter description, adapter name, mac address of target, current mac addr
+        """
+        try:
+            return next(self.find_interfaces(targets=[target]))
+        except StopIteration:
+            pass
+
+    def set_interface_mac(self, device, mac, port=None):
+        description, adapter_name, address, current_address = self.find_interface(device)
+
+        # Locate adapter's registry and update network address (mac)
+        reg_hdl = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+        key = winreg.OpenKey(reg_hdl, self.WIN_REGISTRY_PATH)
+        info = winreg.QueryInfoKey(key)
+
+        # Find adapter key based on sub keys
+        adapter_key = None
+        adapter_path = None
+
+        
+        for x in range(info[0]):
+            subkey = winreg.EnumKey(key, x)
+            path = self.WIN_REGISTRY_PATH + "\\" + subkey
+
+            if subkey == 'Properties':
+                break
+
+            # Check for adapter match for appropriate interface
+            new_key = winreg.OpenKey(reg_hdl, path)
+            try:
+                adapterDesc = winreg.QueryValueEx(new_key, "DriverDesc")
+                if adapterDesc[0] == description:
+                    adapter_path = path
+                    break
+                else:
+                    winreg.CloseKey(new_key)
+            except (WindowsError) as err:
+                if err.errno == 2:  # register value not found, ok to ignore
+                    pass
+                else:
+                    raise err
+
+        if adapter_path is None:
+            winreg.CloseKey(key)
+            winreg.CloseKey(reg_hdl)
+            return
+
+        # Registry path found update mac addr
+        adapter_key = winreg.OpenKey(reg_hdl, adapter_path, 0, winreg.KEY_WRITE)
+        winreg.SetValueEx(adapter_key, "NetworkAddress", 0, winreg.REG_SZ, normalise(mac))
+        winreg.CloseKey(adapter_key)
+        winreg.CloseKey(key)
+        winreg.CloseKey(reg_hdl)
+
+        # Adapter must be restarted in order for change to take affect
+        self.restart_adapter(adapter_name)
+
+
+class MacSpoofer(OsSpoofer):
+    """
+    OS X platform specfic implementation for MAC spoofing.
+    """
+
+    # Path to Airport binary. This works on 10.7 and 10.8, but might be different
+    # on older OS X versions.
+    PATH_TO_AIRPORT = (
+        '/System/Library/PrivateFrameworks/Apple80211.framework/Resources/airport'
+    )
+
+    def find_interfaces(self, targets=None):
+        """
+        Returns the list of interfaces found on this machine as reported
+        by the `networksetup` command.
+        """
+        targets = [t.lower() for t in targets] if targets else []
+        # Parse the output of `networksetup -listallhardwareports` which gives
+        # us 3 fields per port:
+        # - the port name,
+        # - the device associated with this port, if any,
+        # - The MAC address, if any, otherwise 'N/A'
+        details = re.findall(
+            r'^(?:Hardware Port|Device|Ethernet Address): (.+)$',
+            subprocess.check_output((
+                'networksetup',
+                '-listallhardwareports'
+            ), universal_newlines=True), re.MULTILINE
+        )
+        # Split the results into chunks of 3 (for our three fields) and yield
+        # those that match `targets`.
+        for i in range(0, len(details), 3):
+            port, device, address = details[i:i + 3]
+
+            address = MAC_ADDRESS_R.match(address.upper())
+            if address:
+                address = address.group(0)
+
+            current_address = self.get_interface_mac(device)
+
+            if not targets:
+                # Not trying to match anything in particular,
+                # return everything.
+                yield port, device, address, current_address
+                continue
+
+            for target in targets:
+                if target in (port.lower(), device.lower()):
+                    yield port, device, address, current_address
+                    break
+
+
+    def find_interface(self, target):
+        """
+        Returns the first interface which matches `target`.
+        """
+        try:
+            return next(self.find_interfaces(targets=[target]))
+        except StopIteration:
+            pass
+
+
+    def set_interface_mac(self, device, mac, port):
+        """
+        Sets the mac address for `device` to `mac`.
+        """
+        if port.lower() in wireless_port_names:
+            # Turn on the device, assuming it's an airport device.
+            subprocess.call([
+                'networksetup',
+                '-setairportpower',
+                device,
+                'on'
+            ])
+
+        # For some reason this seems to be required even when changing a
+        # non-airport device.
+        subprocess.check_call([
+            MacSpoofer.PATH_TO_AIRPORT,
+            '-z'
+        ])
+
+        # Change the MAC.
+        subprocess.check_call([
+            'ifconfig',
+            device,
+            'ether',
+            mac
+        ])
+
+        # Associate airport with known network (if any)
+        subprocess.check_call([
+            'networksetup',
+            '-detectnewhardware'
+        ])
+
+
+    def get_interface_mac(self, device):
+        """
+        Returns currently-set MAC address of given interface. This is
+        distinct from the interface's hardware MAC address.
+        """
+
+        try:
+            result = subprocess.check_output([
+                'ifconfig',
+                device
+            ], stderr=subprocess.STDOUT, universal_newlines=True)
+        except subprocess.CalledProcessError:
+            return None
+
+        address = MAC_ADDRESS_R.search(result.upper())
+        if address:
+            address = address.group(0)
+
+        return address
+
+
+def get_os_spoofer():
+    """
+    OsSpoofer factory initializes approach OS platform dependent spoofer.
+    """
+    spoofer = None
+
+    if sys.platform == 'win32':
+        spoofer = WindowsSpoofer()
+    elif sys.platform == 'darwin':
+        spoofer = MacSpoofer()
+    elif sys.platform.startswith('linux'):
+        if os.path.exists("/usr/bin/ip") or os.path.exists("/bin/ip"):
+            spoofer = LinuxSpooferIP()
+        else:
+            spoofer = LinuxSpoofer()
+    else:
+        raise NotImplementedError()
+
+    return spoofer
+
+def find_interfaces(targets=None):
+    """
+    Returns the list of interfaces found on this machine reported by the OS.
+
+    Target varies by platform:
+        MacOS & Linux this is the interface name in ifconfig or ip
+        Windows this is the network adapter name in ipconfig
+    """
+    # Wrapper to interface handles encapsulating objects
+    spoofer = get_os_spoofer()
+    return spoofer.find_interfaces(targets)
+
+def find_interface(targets=None):
+    """
+    Returns tuple of the first interface which matches `target`.
+        adapter description, adapter name, mac address of target, current mac addr
+
+    Target varies by platform:
+        MacOS & Linux this is the interface name in ifconfig or ip
+        Windows this is the network adapter name in ipconfig
+    """
+    # Wrapper to interface handles encapsulating objects
+    spoofer = get_os_spoofer()
+    return spoofer.find_interface(targets)
+
+def set_interface_mac(device, mac, port=None):
+    """
+    Sets the mac address for given `device` to `mac`.
+
+    Device varies by platform:
+        MacOS & Linux this is the interface name in ifconfig or ip
+        Windows this is the network adapter name in ipconfig
+    """
+    # Wrapper to interface handles encapsulating objects
+    spoofer = get_os_spoofer()
+    spoofer.set_interface_mac(device, mac, port)
