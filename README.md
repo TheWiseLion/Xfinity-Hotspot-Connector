@@ -59,7 +59,6 @@
 ![Alt text](/screenshots/ConceptArt.png?raw=true "From Ideas To Fruition - It's The power Of Software")
 
 
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/TheWiseLion/xfinity-hotspot-connector/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
 
 
 
