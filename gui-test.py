@@ -362,16 +362,18 @@ class MyApp(App):
         switch = ToggleButton(text = 'Off', state='normal', pos_hint={'x':x+buttonWidth*.35, 'y':y+yAdd*8},size_hint=(.25,.1), color = (1,0,0,1))
 
         threadSafeList = MyList() #Updates from network reset thread
-
+        global thState
+        thState = None
         def cb(dt):
             global lasttimeZ
             global countertimeZ
             global isInternet
+            global thState
             if isOn:
                 connectionTimer.update()
                 refreshCountDown.update()
-                if refreshCountDown.left() < 0:
-                    callback(switch, 'down', True)
+                if refreshCountDown.left() < 0 and( thState==None or not thState.locked()):
+                    thState =callback(switch, 'down', True)
             while len(threadSafeList) > 0:
                 programOutput.update_status(threadSafeList.pop())
             countertimeZ += dt

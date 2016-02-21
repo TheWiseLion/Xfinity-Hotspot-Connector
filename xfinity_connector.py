@@ -210,7 +210,7 @@ def resetNetwork(adapter,network,statusOut):
 
         statusOut.append("Changing mac address...")
         adapter.setMacAddress(newMac)
-        statusOut.append("Mac address is now "+adapter.getMacAddress())
+        #statusOut.append("Mac address is now "+adapter.getMacAddress())
         time.sleep(3)
         statusOut.append("Connecting to "+network.ssid)
         adapter.connectToNetwork(network)
@@ -223,8 +223,8 @@ def resetNetwork(adapter,network,statusOut):
             statusOut.append("Registering mac ....")
             if not register_mac_with_xfinity(newMac,statusOut,count=-1,time_out=45):
                 statusOut.append("Mac registration failed...")
-    thread.start_new_thread(run, ())
-    return None
+    return thread.start_new_thread(run, ())
+
 
 def is_internet(host="8.8.8.8", port=53,time_out=5):
     r = False
