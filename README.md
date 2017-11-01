@@ -48,5 +48,5 @@
 + Other hotspot network support (e.g. at&t)
  
 ## Initial Concept Art
-![Alt text](/screenshots/ConceptArt.PNG?raw=true "From Ideas To Fruition - It's The power Of Software")
+![Alt text](/screenshots/ConceptArt.png?raw=true "From Ideas To Fruition - It's The power Of Software")
 
