@@ -1,6 +1,6 @@
 # Xfinity-Hotspot-Connector
 
-###This is an automatic connector for Xfinity Hotspots.
+### This is an automatic connector for Xfinity Hotspots.
 
 
 <dl><dd><dd>Automatically changes mac-address and reapplies for Xfinity's complementary (free) hour of internet.  </dd></dd></dl>
@@ -10,7 +10,7 @@
 
 
 
-###Instructions:
+### Instructions:
 <dl>
   <dd>To download the standalone application:  <a href="/Xfinity_Connector.zip?raw=true">click here</a> </dd>
   
@@ -22,7 +22,7 @@
 </dl>
 
 
-###Technologies:
+### Technologies:
   + Selenium
   + PhantomJS
   + Kivy
@@ -40,7 +40,7 @@
 </dl>
 
 
-###Possible Improvements:
+### Possible Improvements:
 + I'd be nice if another developer figured out how to switch connections without tcp connections getting reset. This seems like it      might   be possible since the ip-address often stays exactly the same between reconnects.
   ![Alt text](/screenshots/IP-Same.PNG?raw=true "Ip Stays The Same")
 + Support for mac & linux
